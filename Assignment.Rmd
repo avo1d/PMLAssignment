@@ -1,0 +1,82 @@
+---
+title: "PML Assignment"
+author: "Bi Mian"
+date: "15 February 2016"
+output: html_document
+---
+Loading Libraries
+```{r}
+require(caret)
+require(rpart)
+require(randomForest)
+require(reshape2)
+require(ggplot2)
+setwd("/Volumes/Data/Users/z3485609/Documents/R/Coursera/MachineLearning/")
+```
+
+Loading & Cleaning Data  
+Many columns had no variables and first 7 columns are just names
+Sub-splitting pml-training into training (80%) and testing (20%) datasets
+```{r}
+train<-read.csv("pml-training.csv", header = TRUE, na.string=c("NA",""))
+test <-read.csv("pml-testing.csv", header = TRUE, na.string=c("NA",""))
+
+train <- train[,-c(1:7)]
+train <- train[,-which(colSums(is.na(train)) > 0)]
+
+test <- test[,-c(1:7)]
+test <- test[,-which(colSums(is.na(test)) > 0)]
+
+dim(train); dim(test)
+
+inTrain <- createDataPartition(train$classe, p = 0.8, list=FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+```
+
+Training with RPART & RandomForest
+and Predicting with Testing set
+```{r}
+set.seed(999)
+
+mod.rp <- train(classe ~ ., data = training, method="rpart")
+mod.rf <- randomForest(classe ~ ., data = training, ntrees=50)
+
+pred.rp <- predict(mod.rp, testing)
+pred.rf <- predict(mod.rf, testing)
+
+mat.rp <- confusionMatrix(pred.rp, testing$classe)
+mat.rf <- confusionMatrix(pred.rf, testing$classe)
+
+#RPART Results
+mat.rp
+rp.table <- mat.rp$table
+rp.df<-dcast(as.data.frame(rp.table), Prediction ~ Reference, value.var="Freq")
+for(i in 1:nrow(rp.df[,2:6])) rp.df[i,2:6]<-rp.df[i,2:6]/rowSums(rp.df[,2:6])[i]
+ggplot(melt(rp.df)) + 
+      geom_tile(aes(x=variable, y=Prediction, fill=value)) + 
+      geom_text(aes(x=variable, y=Prediction, label=signif(value, digits=3))) +
+      scale_fill_gradient(limits=c(0, 1), low="white", high="red")
+
+
+#RandomForest Results
+mat.rf
+mat.rf$overall[1]
+
+rf.table <- mat.rf$table
+rf.df<-dcast(as.data.frame(rf.table), Prediction ~ Reference, value.var="Freq")
+for(i in 1:nrow(rf.df[,2:6])) rf.df[i,2:6]<-rf.df[i,2:6]/rowSums(rf.df[,2:6])[i]
+
+ggplot(melt(rf.df)) + 
+      geom_tile(aes(x=variable, y=Prediction, fill=value)) + 
+      geom_text(aes(x=variable, y=Prediction, label=signif(value, digits=3))) +
+      scale_fill_gradient(limits=c(0, 1), low="white", high="red")
+
+
+```
+
+RandomForest gives best results with >99% accuracy
+Predicting using RF model on 20 tests
+```{r}
+predict(mod.rf, test)
+```
